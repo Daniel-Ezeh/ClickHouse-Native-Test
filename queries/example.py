@@ -3,7 +3,6 @@ select count(*) from clickhouse.channel_timeseries
 '''
 
 year = """
-
 WITH metadata AS
 (
     SELECT
@@ -29,8 +28,7 @@ SELECT
     ) AS power
 FROM clickhouse.channel_timeseries AS ts
 INNER JOIN metadata AS m
-    ON ts.channel_uuid = m.channel_uuid
-                                                                                                                                                            
+    ON ts.channel_uuid = m.channel_uuid                                                                                                                                              
 WHERE ts.timestamp_utc >= '2025-01-28 00:00:00'
   AND ts.timestamp_utc <= '2026-02-20 23:59:59'
   AND (ts.__deleted = 'false' OR ts.__deleted IS NULL)
@@ -39,6 +37,46 @@ GROUP BY
     m.channel
 ORDER BY
     timestamp_utc,
-    m.channel;
+    m.channel
+"""
+
+
+
+
+year2 = """
+
+SELECT
+    toStartOfInterval(ts.timestamp_utc, toIntervalSecond(300)) AS timestamp_utc,
+    m.channel,
+    sum(
+        multiIf(
+            m.channel_type = 'battery' AND ts.power < 0, abs(ts.power),
+            m.channel_type = 'load', ts.power,
+            0
+        )
+    ) AS power
+FROM clickhouse.channel_timeseries AS ts FINAL
+INNER JOIN (
+    SELECT
+        channel_uuid,
+        m.channel_name AS channel,
+        channel_type
+    FROM clickhouse.channel_metadata AS m
+    WHERE location_id = '69243da80da1c071834ac6e4'
+      AND channel_type IN ('battery', 'load')
+      AND m.channel_name IS NOT NULL
+      AND m.channel_name != ''
+      AND (m.__deleted = 'false' OR m.__deleted IS NULL)
+) AS m
+    ON ts.channel_uuid = m.channel_uuid
+WHERE ts.timestamp_utc BETWEEN toDateTime('2026-01-28 00:00:00') AND toDateTime('2026-02-20 23:59:59')
+  AND ts.power IS NOT NULL
+  AND (ts.__deleted = 'false' OR ts.__deleted IS NULL)
+GROUP BY
+    timestamp_utc,
+    m.channel
+ORDER BY
+    timestamp_utc,
+    m.channel
 
 """
